@@ -58,12 +58,7 @@ func (m *manager) Reload(config *LogConfig) {
 	//把旧的config里的缓存全部写入到文件 防止日志丢失
 	for _, v := range m.config.Targets {
 		//写入日志文件
-		var cache *bytes.Buffer
-		if v.CurrLogBuff == LogBufferIDA {
-			cache = &v.LogBufA
-		} else {
-			cache = &v.LogBufB
-		}
+		cache := &v.LogBuf[v.CurrLogBuff%len(v.LogBuf)]
 		//写入日志文件
 		m.createLogFile(v)
 		m.writeToFile(v.FullLogFileName, cache)
@@ -84,13 +79,9 @@ func (m *manager) WriteEvent(e LogEvent) {
 			continue
 		}
 		v.Locker.Lock()
-		if v.CurrLogBuff == LogBufferIDA {
-			v.LogBufA.Write(bs)
-			v.LogBufA.WriteByte('\n')
-		} else {
-			v.LogBufB.Write(bs)
-			v.LogBufB.WriteByte('\n')
-		}
+		index := v.CurrLogBuff % len(v.LogBuf)
+		v.LogBuf[index].Write(bs)
+		v.LogBuf[index].WriteByte('\n')
 		v.CurrCacheSize += len(bs) + 1
 		v.Locker.Unlock()
 	}
@@ -111,13 +102,8 @@ func (m *manager) flush(force bool) {
 			//写入日志文件
 			var cache *bytes.Buffer
 			v.Locker.Lock()
-			if v.CurrLogBuff == LogBufferIDA {
-				cache = &v.LogBufA
-				v.CurrLogBuff = LogBufferIDB
-			} else {
-				cache = &v.LogBufB
-				v.CurrLogBuff = LogBufferIDA
-			}
+			cache = &v.LogBuf[v.CurrLogBuff%len(v.LogBuf)]
+			v.CurrLogBuff = (v.CurrLogBuff + 1) % len(v.LogBuf)
 			v.CurrCacheSize = 0
 			v.Locker.Unlock()
 			//写入日志文件
@@ -163,10 +149,11 @@ func (m *manager) createLogFile(ft *FileTarget) {
 	}
 }
 
-func (m *manager) writeToFile(fn string, logs *bytes.Buffer) int {
+func (m *manager) writeToFile(fn string, logs *bytes.Buffer) (size int) {
 	defer func() {
 		if err := recover(); err != nil {
 			fmt.Println("writeToFile 0:", fn, ":", err)
+			size = 0
 		}
 	}()
 	if logs.Len() <= 0 {

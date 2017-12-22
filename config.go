@@ -24,15 +24,6 @@ const (
 	CriticalLevel
 )
 
-//LogBufferID 当前使用的buffer
-type LogBufferID byte
-
-//log的bufferID
-const (
-	LogBufferIDA = 'A'
-	LogBufferIDB = 'B'
-)
-
 //FileTarget 文件项
 type FileTarget struct {
 	Name       string        //只读
@@ -48,10 +39,9 @@ type FileTarget struct {
 	CurrLogSize     int64
 
 	Locker        *sync.Mutex
-	CurrLogBuff   LogBufferID  //protected by locker
-	LogBufA       bytes.Buffer //protected by locker
-	LogBufB       bytes.Buffer //protected by locker
-	CurrCacheSize int          //protected by locker 当前buffer中的大小
+	CurrLogBuff   int             //protected by locker
+	LogBuf        [2]bytes.Buffer //protected by locker
+	CurrCacheSize int             //protected by locker 当前buffer中的大小
 
 	NextWriteTime time.Time
 	LastPCDate    string
@@ -234,7 +224,7 @@ func convert(fc FileContent) (*LogConfig, error) {
 		tmp.Serializer = FindSerializer(v.Serializer)
 
 		tmp.Locker = &sync.Mutex{}
-		tmp.CurrLogBuff = LogBufferIDA
+		tmp.CurrLogBuff = 0
 		config.Targets = append(config.Targets, tmp)
 	}
 	return config, nil
