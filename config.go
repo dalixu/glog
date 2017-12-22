@@ -35,11 +35,12 @@ const (
 
 //FileTarget 文件项
 type FileTarget struct {
-	Name       string     //只读
-	MinLevel   LogLevel   //只读
-	MaxLevel   LogLevel   //只读
-	FileSuffix string     //文件名后缀 默认的文件名是 {shortDate}-suffix
-	Serializer Serializer //序列化
+	Name       string        //只读
+	MinLevel   LogLevel      //只读
+	MaxLevel   LogLevel      //只读
+	FileSuffix string        //只读文件名后缀 默认的文件名是 {shortDate}-suffix
+	Serializer Serializer    //只读序列化
+	Interval   time.Duration //只读 写入的时间间隔
 
 	Slice           int //当前写入的文件序号 默认为0
 	LogFileName     string
@@ -51,9 +52,9 @@ type FileTarget struct {
 	LogBufA       bytes.Buffer //protected by locker
 	LogBufB       bytes.Buffer //protected by locker
 	CurrCacheSize int          //protected by locker 当前buffer中的大小
-	NextWriteTime int64
 
-	LastPCDate string
+	NextWriteTime time.Time
+	LastPCDate    string
 }
 
 //Match 是否可以写入Target
@@ -63,7 +64,6 @@ func (ft FileTarget) Match(l LogLevel, name string) bool {
 
 //LogConfig 文件配置
 type LogConfig struct {
-	WriteInvTime   int64         //只读
 	SingleFileSize int64         //只读
 	LogCacheSize   int           //只读
 	Root           string        //只读
@@ -77,11 +77,11 @@ type Descriptor struct {
 	MaxLevel   string
 	FileSuffix string
 	Serializer string
+	Interval   int
 }
 
 //FileContent 配置文件对应的结构
 type FileContent struct {
-	WriteInvTime   int64
 	SingleFileSize int64
 	LogCacheSize   int
 	Root           string
@@ -143,10 +143,11 @@ func (file *ConfigFile) StartMonitor(delegate func(config *LogConfig)) {
 			select {
 			case <-file.stop:
 				break loop
-			case <-time.After(5 * time.Second):
+			case <-time.After(10 * time.Second):
 				stat, err := os.Stat(file.path)
 				//必须是文件
 				if err != nil || stat.IsDir() {
+					fmt.Println("StartMonitor 0:", file.path, ":", err)
 					continue loop
 				}
 				//文件修改时间不等则准备更新config
@@ -154,7 +155,8 @@ func (file *ConfigFile) StartMonitor(delegate func(config *LogConfig)) {
 					file.modTime = stat.ModTime()
 					config, err := file.Load(file.path)
 					if err != nil {
-						continue
+						fmt.Println("StartMonitor 1 load fail:", file.path, ":", err)
+						continue loop
 					}
 					file.invoke(delegate, config)
 				}
@@ -168,7 +170,6 @@ func (file *ConfigFile) StartMonitor(delegate func(config *LogConfig)) {
 //StopMonitor 停止监控文件变化
 func (file *ConfigFile) StopMonitor() {
 	file.stop <- true
-
 }
 
 func (file *ConfigFile) invoke(delegate func(config *LogConfig), config *LogConfig) {
@@ -183,14 +184,10 @@ func (file *ConfigFile) invoke(delegate func(config *LogConfig), config *LogConf
 func convert(fc FileContent) (*LogConfig, error) {
 	//设置默认值
 	config := &LogConfig{
-		WriteInvTime:   1000,
 		SingleFileSize: 1024 * 1024 * 10,
 		LogCacheSize:   1024 * 10,
 		Root:           "./logs",
 		Targets:        nil,
-	}
-	if fc.WriteInvTime != 0 {
-		config.WriteInvTime = fc.WriteInvTime
 	}
 	if fc.SingleFileSize != 0 {
 		config.SingleFileSize = fc.SingleFileSize
@@ -228,6 +225,11 @@ func convert(fc FileContent) (*LogConfig, error) {
 			tmp.FileSuffix = ".log"
 		} else {
 			tmp.FileSuffix = v.FileSuffix
+		}
+		if v.Interval <= 0 {
+			tmp.Interval = time.Duration(time.Second)
+		} else {
+			tmp.Interval = time.Duration(v.Interval) * time.Second
 		}
 		tmp.Serializer = FindSerializer(v.Serializer)
 

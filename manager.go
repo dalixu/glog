@@ -105,11 +105,11 @@ func (m *manager) flush(force bool) {
 			fmt.Println("flush 0:", err)
 		}
 	}()
-	now := time.Now().Unix()
+	now := time.Now()
 	m.rwLocker.RLock()
 	defer m.rwLocker.RUnlock()
 	for _, v := range m.config.Targets {
-		if now >= v.NextWriteTime || v.CurrCacheSize >= m.config.LogCacheSize || force {
+		if now.After(v.NextWriteTime) || v.CurrCacheSize >= m.config.LogCacheSize || force {
 			//写入日志文件
 			var cache *bytes.Buffer
 			v.Locker.Lock()
@@ -126,7 +126,7 @@ func (m *manager) flush(force bool) {
 			m.createLogFile(v)
 
 			v.CurrLogSize += int64(m.writeToFile(v.FullLogFileName, cache))
-			v.NextWriteTime += m.config.WriteInvTime
+			v.NextWriteTime = now.Add(v.Interval)
 		}
 	}
 }
