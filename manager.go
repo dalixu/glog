@@ -22,19 +22,17 @@ type Manager interface {
 type manager struct {
 	loggers sync.Map
 
-	stop      chan bool
-	waitGroup *sync.WaitGroup
-	rwLocker  *sync.RWMutex
-	config    *LogConfig // protected by rwLocker
+	stop     chan bool
+	rwLocker *sync.RWMutex
+	config   *LogConfig // protected by rwLocker
 }
 
 //newManager 返回Manager
 func newManager(config *LogConfig) Manager {
 	mr := &manager{
-		stop:      make(chan bool),
-		waitGroup: &sync.WaitGroup{},
-		rwLocker:  &sync.RWMutex{},
-		config:    config,
+		stop:     make(chan bool), //无缓冲 自动会等
+		rwLocker: &sync.RWMutex{},
+		config:   config,
 	}
 	mr.startLoop()
 	return mr
@@ -71,7 +69,7 @@ func (m *manager) Reload(config *LogConfig) {
 		m.writeToFile(v.FullLogFileName, cache)
 	}
 	m.config = config
-	m.stopLoop()
+	m.startLoop()
 }
 
 func (m *manager) WriteEvent(e LogEvent) {
@@ -194,7 +192,6 @@ func (m *manager) writeToFile(fn string, logs *bytes.Buffer) int {
 }
 
 func (m *manager) startLoop() {
-	m.waitGroup.Add(1)
 	go func() {
 	loop:
 		for {
@@ -206,13 +203,11 @@ func (m *manager) startLoop() {
 			m.flush(false)
 			runtime.Gosched()
 		}
-		m.waitGroup.Done()
 	}()
 }
 
 func (m *manager) stopLoop() {
-	m.stop <- true
-	m.waitGroup.Wait()
+	m.stop <- true //等待loop退出
 	m.flush(true)
 }
 
