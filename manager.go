@@ -144,12 +144,13 @@ func (m *manager) createLogFile(ft *FileTarget) {
 		ft.Slice = 0
 		ft.CurrLogSize = 0
 		ft.FullLogFileName = "" //文件名置空
+		ft.LastPCDate = currPCDate
 	}
 	if ft.FullLogFileName == "" {
 		for {
 			//如果文件名不存在 或者 日期切换 要根据slice来生成新的文件名
 			sliceDesc := strconv.Itoa(ft.Slice)
-			path := m.config.Root + "/" + currPCDate + "-" + sliceDesc + "-" + ft.FileSuffix
+			path := m.config.Root + "/" + ft.LastPCDate + "-" + sliceDesc + "-" + ft.FileSuffix
 			stat, err := os.Stat(path)
 			if err == nil {
 				ft.CurrLogSize = stat.Size()
