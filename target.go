@@ -2,8 +2,10 @@ package logger
 
 import (
 	"bytes"
+	"container/list"
 	"fmt"
 	"os"
+	"path"
 	"strconv"
 	"sync"
 	"time"
@@ -12,10 +14,15 @@ import (
 //Target 日志文件写入
 type Target interface {
 	Match(event *LogEvent) bool
-	Write(log []byte)
+	Write(event *LogEvent, sr Serializer)
 
 	NeedFlush() bool
 	Flush()
+}
+
+type asyncLogNode struct {
+	event      *LogEvent
+	serializer Serializer
 }
 
 //FileTarget 文件项
@@ -29,9 +36,9 @@ type fileTarget struct {
 	VolumeSize int64         //单个日志文件大小
 	CacheSize  int           // 日志缓存大小
 	Root       string        // 日志存放的根目录
+	Async      bool          //异步序列化日志
 
 	Slice           int //当前写入的文件序号 默认为0
-	LogFileName     string
 	FullLogFileName string
 	CurrLogSize     int64
 
@@ -39,6 +46,7 @@ type fileTarget struct {
 	CurrLogBuff   int             //protected by locker
 	LogBuf        [2]bytes.Buffer //protected by locker
 	CurrCacheSize int             //protected by locker 当前buffer中的大小
+	Queue         *list.List
 
 	NextWriteTime time.Time
 	LastPCDate    string
@@ -48,12 +56,20 @@ func (ft *fileTarget) Match(event *LogEvent) bool {
 	return event.Level >= ft.MinLevel && event.Level <= ft.MaxLevel && (ft.Name == "" || ft.Name == event.Name)
 }
 
-func (ft *fileTarget) Write(log []byte) {
+func (ft *fileTarget) Write(event *LogEvent, sr Serializer) {
 	ft.Locker.Lock()
-	index := ft.CurrLogBuff % len(ft.LogBuf)
-	ft.LogBuf[index].Write(log)
-	ft.LogBuf[index].WriteByte('\n')
-	ft.CurrCacheSize += len(log) + 1
+	if ft.Async {
+		ft.Queue.PushBack(asyncLogNode{event: event, serializer: sr})
+	} else {
+		bs := sr.Encode(event)
+		if bs == nil {
+			return
+		}
+		index := ft.CurrLogBuff % len(ft.LogBuf)
+		ft.LogBuf[index].Write(bs)
+		ft.LogBuf[index].WriteByte('\n')
+		ft.CurrCacheSize += len(bs) + 1
+	}
 	ft.Locker.Unlock()
 }
 
@@ -65,15 +81,35 @@ func (ft *fileTarget) NeedFlush() bool {
 func (ft *fileTarget) Flush() {
 	//写入日志文件
 	var cache *bytes.Buffer
+	var queue *list.List
 	ft.Locker.Lock()
 	cache = &ft.LogBuf[ft.CurrLogBuff%len(ft.LogBuf)]
 	ft.CurrLogBuff = (ft.CurrLogBuff + 1) % len(ft.LogBuf)
 	ft.CurrCacheSize = 0
+	if ft.Async || ft.Queue.Len() > 0 {
+		queue = list.New()
+		for {
+			if ft.Queue.Len() <= 0 {
+				break
+			}
+			e := ft.Queue.Front()
+			ft.Queue.Remove(e)
+			queue.PushBack(e.Value)
+		}
+	}
 	ft.Locker.Unlock()
+	for {
+		if queue == nil || queue.Len() <= 0 {
+			break
+		}
+		node := queue.Front()
+		queue.Remove(node)
+		e := node.Value.(asyncLogNode)
+		cache.Write(e.serializer.Encode(e.event))
+	}
 	//写入日志文件
 	ft.createLogFile()
-
-	ft.CurrLogSize += int64(ft.writeToFile(ft.FullLogFileName, cache))
+	ft.CurrLogSize += int64(ft.writeFromCache(cache))
 	ft.NextWriteTime = time.Now().Add(ft.Interval)
 }
 
@@ -98,8 +134,8 @@ func (ft *fileTarget) createLogFile() {
 		for {
 			//如果文件名不存在 或者 日期切换 要根据slice来生成新的文件名
 			sliceDesc := strconv.Itoa(ft.Slice)
-			path := ft.Root + "/" + ft.LastPCDate + "-" + sliceDesc + "-" + ft.Suffix
-			stat, err := os.Stat(path)
+			ft.FullLogFileName = path.Join(ft.Root, ft.LastPCDate+"-"+sliceDesc+"-"+ft.Suffix)
+			stat, err := os.Stat(ft.FullLogFileName)
 			if err == nil {
 				ft.CurrLogSize = stat.Size()
 			}
@@ -115,10 +151,10 @@ func getShortDate() string {
 	return time.Now().Format("2006-01-02")
 }
 
-func (ft *fileTarget) writeToFile(fn string, logs *bytes.Buffer) (size int) {
+func (ft *fileTarget) writeFromCache(logs *bytes.Buffer) (size int) {
 	defer func() {
 		if err := recover(); err != nil {
-			fmt.Println("writeToFile 0:", fn, ":", err)
+			fmt.Println("writeFromCache 0:", ft.FullLogFileName, ":", err)
 			size = 0
 		}
 	}()
@@ -127,9 +163,9 @@ func (ft *fileTarget) writeToFile(fn string, logs *bytes.Buffer) (size int) {
 	}
 	defer logs.Reset()
 
-	f, err := os.OpenFile(fn, os.O_WRONLY|os.O_CREATE|os.O_APPEND, os.ModePerm)
+	f, err := os.OpenFile(ft.FullLogFileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, os.ModePerm)
 	if err != nil {
-		fmt.Println("writeToFile 1:", fn, ":", err)
+		fmt.Println("writeFromCache 1:", ft.FullLogFileName, ":", err)
 		return 0
 	}
 	defer f.Close()
@@ -138,7 +174,7 @@ func (ft *fileTarget) writeToFile(fn string, logs *bytes.Buffer) (size int) {
 		err = f.Sync()
 	}
 	if err != nil {
-		fmt.Println("writeToFile 2:", fn, ":", err)
+		fmt.Println("writeFromCache 2:", ft.FullLogFileName, ":", err)
 		return 0
 	}
 	return n
@@ -200,7 +236,14 @@ func createFileTarget(config map[string]interface{}) Target {
 	} else {
 		ft.Interval = time.Duration(interval.(int)) * time.Second
 	}
+	async := config["Async"]
+	if async == nil {
+		ft.Async = true
+	} else {
+		ft.Async = async.(bool)
+	}
 	ft.Locker = &sync.Mutex{}
+	ft.Queue = list.New()
 	ft.CurrLogBuff = 0
 	return ft
 }

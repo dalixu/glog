@@ -70,7 +70,7 @@ func (file *ConfigFile) Load(path string) (lc *LogConfig, e error) {
 	}
 
 	var ct map[string]interface{}
-	err = json.Unmarshal(content, ct)
+	err = json.Unmarshal(content, &ct)
 	if err != nil {
 		return nil, err
 	}
@@ -78,8 +78,8 @@ func (file *ConfigFile) Load(path string) (lc *LogConfig, e error) {
 	if err != nil {
 		return nil, err
 	}
-	fc.path = path
-	fc.modTime = stat.ModTime()
+	file.path = path
+	file.modTime = stat.ModTime()
 	return cf, nil
 }
 
@@ -137,17 +137,18 @@ func convert(content map[string]interface{}) (*LogConfig, error) {
 	if _, ok := content["Layouts"]; !ok {
 		return nil, errors.New("Layouts missed")
 	}
-	layouts := content["Layouts"].([]map[string]interface{})
+	layouts := content["Layouts"].([]interface{})
 	//设置默认值
 	config := &LogConfig{
 		Layouts: nil,
 	}
 	for _, v := range layouts {
+		tmp := v.(map[string]interface{})
 		layout := &Layout{}
-		se := v["Serializer"].(map[string]interface{})
+		se := tmp["Serializer"].(map[string]interface{})
 		seType := se["Type"].(string)
 		layout.Serializer = findSerializer(seType)
-		tt := v["Target"].(map[string]interface{})
+		tt := tmp["Target"].(map[string]interface{})
 		ttType := tt["Type"].(string)
 		layout.Target = findTarget(ttType, tt)
 		if layout.Serializer != nil && layout.Target != nil {

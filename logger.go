@@ -12,7 +12,7 @@ import (
 // )
 
 //Properties LogEvent属性 方便添加自定义字段
-type Properties map[interface{}]interface{}
+type Properties map[string]interface{}
 
 //LogEvent log的具体内容
 type LogEvent struct {

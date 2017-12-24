@@ -3,7 +3,7 @@ package logger
 //全局配置
 func init() {
 	globalSerializer = make(map[string]Serializer)
-	globalSerializer["default"] = &DefaultSerializer{}
+	globalSerializer["plain"] = &DefaultSerializer{}
 	globalSerializer["json"] = &JSONSerializer{}
 
 	globalTarget = make(map[string]TargetCtor)
@@ -32,7 +32,7 @@ func RegisterTarget(name string, ctor TargetCtor) {
 func findSerializer(name string) Serializer {
 	var seria = globalSerializer[name]
 	if seria == nil {
-		seria = globalSerializer["default"]
+		seria = globalSerializer["plain"]
 	}
 	return seria
 }

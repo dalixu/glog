@@ -66,11 +66,7 @@ func (m *manager) WriteEvent(e LogEvent) {
 		if !v.Target.Match(&e) {
 			continue
 		}
-		bs := v.Serializer.Encode(&e)
-		if bs == nil {
-			continue
-		}
-		v.Target.Write(bs)
+		v.Target.Write(&e, v.Serializer)
 	}
 }
 
