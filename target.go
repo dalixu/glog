@@ -13,10 +13,8 @@ import (
 
 //Target 日志文件写入
 type Target interface {
-	Match(event *LogEvent) bool
 	Write(event *LogEvent, sr Serializer)
-
-	NeedFlush() bool
+	Filled() bool
 	Flush()
 }
 
@@ -57,6 +55,9 @@ func (ft *fileTarget) Match(event *LogEvent) bool {
 }
 
 func (ft *fileTarget) Write(event *LogEvent, sr Serializer) {
+	if !ft.Match(event) {
+		return
+	}
 	ft.Locker.Lock()
 	if ft.Async {
 		ft.Queue.PushBack(asyncLogNode{event: event, serializer: sr})
@@ -73,7 +74,7 @@ func (ft *fileTarget) Write(event *LogEvent, sr Serializer) {
 	ft.Locker.Unlock()
 }
 
-func (ft *fileTarget) NeedFlush() bool {
+func (ft *fileTarget) Filled() bool {
 	now := time.Now()
 	return now.After(ft.NextWriteTime) || ft.CurrCacheSize >= ft.CacheSize
 }
@@ -105,7 +106,10 @@ func (ft *fileTarget) Flush() {
 		node := queue.Front()
 		queue.Remove(node)
 		e := node.Value.(asyncLogNode)
-		cache.Write(e.serializer.Encode(e.event))
+		bs := e.serializer.Encode(e.event)
+		if bs != nil {
+			cache.Write(bs)
+		}
 	}
 	//写入日志文件
 	ft.createLogFile()
@@ -117,7 +121,7 @@ func (ft *fileTarget) createLogFile() {
 	currPCDate := getShortDate()
 	if ft.FullLogFileName != "" && ft.CurrLogSize >= ft.VolumeSize {
 		//文件超过允许的大小 写入到新文件中去
-		if ft.Slice < 100000 {
+		if ft.Slice < 100 {
 			ft.Slice++
 			ft.FullLogFileName = ""
 			ft.CurrLogSize = 0
@@ -139,7 +143,7 @@ func (ft *fileTarget) createLogFile() {
 			if err == nil {
 				ft.CurrLogSize = stat.Size()
 			}
-			if ft.CurrLogSize < ft.VolumeSize || ft.Slice >= 100000 {
+			if ft.CurrLogSize < ft.VolumeSize || ft.Slice >= 100 {
 				break
 			}
 			ft.Slice++

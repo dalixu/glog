@@ -63,9 +63,6 @@ func (m *manager) WriteEvent(e LogEvent) {
 	m.rwLocker.RLock()
 	defer m.rwLocker.RUnlock()
 	for _, v := range m.config.Layouts {
-		if !v.Target.Match(&e) {
-			continue
-		}
 		v.Target.Write(&e, v.Serializer)
 	}
 }
@@ -80,7 +77,7 @@ func (m *manager) flush(force bool) {
 	m.rwLocker.RLock()
 	defer m.rwLocker.RUnlock()
 	for _, v := range m.config.Layouts {
-		if force || v.Target.NeedFlush() {
+		if force || v.Target.Filled() {
 			v.Target.Flush()
 		}
 	}
