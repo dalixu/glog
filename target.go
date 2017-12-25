@@ -61,6 +61,7 @@ func (ft *fileTarget) Write(event *LogEvent, sr Serializer) {
 	ft.Locker.Lock()
 	if ft.Async {
 		ft.Queue.PushBack(asyncLogNode{event: event, serializer: sr})
+		ft.CurrCacheSize++
 	} else {
 		bs := sr.Encode(event)
 		if bs == nil {
@@ -192,12 +193,7 @@ func createFileTarget(config map[string]interface{}) Target {
 	} else {
 		ft.VolumeSize = 1024 * 1024 * 10
 	}
-	cacheSize := config["CacheSize"]
-	if cacheSize != nil {
-		ft.CacheSize = cacheSize.(int)
-	} else {
-		ft.CacheSize = 1024 * 10
-	}
+
 	root := config["Root"]
 	if root != nil {
 		ft.Root = root.(string)
@@ -245,6 +241,17 @@ func createFileTarget(config map[string]interface{}) Target {
 		ft.Async = true
 	} else {
 		ft.Async = async.(bool)
+	}
+
+	cacheSize := config["CacheSize"]
+	if cacheSize == nil {
+		if ft.Async {
+			ft.CacheSize = 10 //如果async为true 则cachesize 为日志队列的数量
+		} else {
+			ft.CacheSize = 1024 * 8
+		}
+	} else {
+		ft.CacheSize = cacheSize.(int)
 	}
 	ft.Locker = &sync.Mutex{}
 	ft.Queue = list.New()
