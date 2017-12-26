@@ -207,9 +207,9 @@ func createFileTarget(config map[string]interface{}) Target {
 	}
 	maxLevel := config["MaxLevel"]
 	if maxLevel == nil {
-		ft.MaxLevel = CriticalLevel
+		ft.MaxLevel = FatalLevel
 	} else {
-		ft.MaxLevel = toLevel(maxLevel.(string), CriticalLevel)
+		ft.MaxLevel = toLevel(maxLevel.(string), FatalLevel)
 	}
 
 	minLevel := config["MinLevel"]
@@ -270,8 +270,8 @@ func toLevel(l string, dt LogLevel) LogLevel {
 		return WarnLevel
 	} else if l == "Error" {
 		return ErrorLevel
-	} else if l == "Critical" {
-		return CriticalLevel
+	} else if l == "Fatal" {
+		return FatalLevel
 	}
 	return dt
 }

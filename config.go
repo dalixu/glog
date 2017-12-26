@@ -19,7 +19,7 @@ const (
 	InfoLevel
 	WarnLevel
 	ErrorLevel
-	CriticalLevel
+	FatalLevel
 )
 
 //Layout 用于内部描述

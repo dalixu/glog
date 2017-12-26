@@ -18,15 +18,14 @@
 file Target支持的字段参照target.go createFileTarget<br />
 </p>
 <p>
-初始化日志库 Initialize<br/>
-然后通过GetManager->GetLogger来获取logger 就可以打印日志<br/>
+通过NewManager->GetLogger来获取logger 就可以打印日志 通常1个程序只需要1个manager<br/>
 
 Serializer 目前支持plain 和json<br/>
 自定义Serializer<br/>
 1.实现Serializer<br/>
 2.RegisterSerializer(key, Serializer)<br/>
 3.在配置文件中Serializer的Type字段中指定同样的key<br/>
-4.初始化日志库 Initialize<br/>
+4.NewManager<br/>
 
 Target 目前支持file<br/>
 fileTarget 使用异步写入日志 Async字段为true时 异步序列化 否则同步序列化<br/>
@@ -34,5 +33,5 @@ fileTarget 使用异步写入日志 Async字段为true时 异步序列化 否则
 1.实现TargetCtor<br/>
 2.RegisterTarget(key, TargetCtor)<br/>
 3.在配置文件中Target的Type字段指定同样的key<br/>
-4.初始化日志库 Initialize<br/>
+4.NewManager<br/>
 </p>

@@ -1,5 +1,9 @@
 package logger
 
+import (
+	"log"
+)
+
 //全局配置
 func init() {
 	globalSerializer = make(map[string]Serializer)
@@ -18,13 +22,11 @@ type TargetCtor func(config map[string]interface{}) Target
 var globalTarget map[string]TargetCtor
 
 //RegisterSerializer 添加一个序列化 在配置文件里指定相同的name 则可以调用这个序列化
-//必须在Initialize 之前调用(不保证也不需要线程安全)
 func RegisterSerializer(name string, serial Serializer) {
 	globalSerializer[name] = serial
 }
 
 //RegisterTarget 添加一个Target
-//必须在Initialize 之前调用(不保证也不需要线程安全)
 func RegisterTarget(name string, ctor TargetCtor) {
 	globalTarget[name] = ctor
 }
@@ -45,31 +47,13 @@ func findTarget(name string, config map[string]interface{}) Target {
 	return target(config)
 }
 
-var mr Manager
-var fc *ConfigFile
-
-//GetManager 获得 manager
-func GetManager() Manager {
-	return mr
-}
-
-//Initialize log库初始化
-func Initialize(path string) error {
+//New 返回1个Manager对象 通常1个程序1个manager就可以了
+func New(path string) Manager {
 	file := newConfigFile()
 	config, err := file.Load(path)
 	if err != nil {
-		return err
+		log.Println(err)
+		return nil
 	}
-	mr = newManager(config)
-	fc = file
-	fc.StartMonitor(mr.Reload)
-	return nil
-}
-
-//Finalize 安全退出
-func Finalize() {
-	fc.StopMonitor()
-	mr.Stop()
-	fc = nil
-	mr = nil
+	return newManager(config, file)
 }

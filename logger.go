@@ -38,8 +38,8 @@ type Logger interface {
 	Warnf(format string, v ...interface{})
 	Error(v ...interface{})
 	Errorf(format string, v ...interface{})
-	Critical(v ...interface{})
-	Criticalf(format string, v ...interface{})
+	Fatal(v ...interface{})
+	Fatalf(format string, v ...interface{})
 
 	WriteEvent(e LogEvent) //也许应该用*LogEvent
 }
@@ -112,13 +112,13 @@ func (lr *logger) Errorf(format string, v ...interface{}) {
 }
 
 //Critical 实现接口
-func (lr *logger) Critical(v ...interface{}) {
-	lr.write(CriticalLevel, "CRITICAL", v...)
+func (lr *logger) Fatal(v ...interface{}) {
+	lr.write(FatalLevel, "FATAL", v...)
 }
 
 //Criticalf 实现接口
-func (lr *logger) Criticalf(format string, v ...interface{}) {
-	lr.writef(CriticalLevel, "CRITICAL", format, v...)
+func (lr *logger) Fatalf(format string, v ...interface{}) {
+	lr.writef(FatalLevel, "FATAL", format, v...)
 }
 
 func (lr *logger) write(level LogLevel, desc string, args ...interface{}) {

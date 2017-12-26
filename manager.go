@@ -11,30 +11,33 @@ type Manager interface {
 	GetLogger(name string) Logger
 	WriteEvent(event LogEvent)
 	Reload(config *LogConfig)
-	Stop()
+	Close()
 }
 
 //manager 日志写入
 type manager struct {
-	loggers sync.Map
-
+	file     *ConfigFile
+	loggers  sync.Map
 	stop     chan bool
 	rwLocker *sync.RWMutex
 	config   *LogConfig // protected by rwLocker
 }
 
 //newManager 返回Manager
-func newManager(config *LogConfig) Manager {
+func newManager(config *LogConfig, file *ConfigFile) Manager {
 	mr := &manager{
 		stop:     make(chan bool), //无缓冲 自动会等
 		rwLocker: &sync.RWMutex{},
 		config:   config,
+		file:     file,
 	}
 	mr.startLoop()
+	mr.file.StartMonitor(mr.Reload)
 	return mr
 }
 
-func (m *manager) Stop() {
+func (m *manager) Close() {
+	m.file.StopMonitor()
 	m.stopLoop()
 }
 
