@@ -10,7 +10,6 @@ import (
 type Manager interface {
 	GetLogger(name string) Logger
 	WriteEvent(event LogEvent)
-	Reload(config *LogConfig)
 	Close()
 }
 
