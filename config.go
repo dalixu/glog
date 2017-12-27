@@ -3,8 +3,8 @@ package logger
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"time"
 )
@@ -51,7 +51,7 @@ func (file *ConfigFile) Load(path string) (lc *LogConfig, e error) {
 	defer func() {
 		if err := recover(); err != nil {
 			lc = nil
-			e = fmt.Errorf("%+v", err)
+			e = log.Errorf("%+v", err)
 		}
 	}()
 	if path == "" {
@@ -62,7 +62,7 @@ func (file *ConfigFile) Load(path string) (lc *LogConfig, e error) {
 		return nil, err
 	}
 	if stat.IsDir() {
-		return nil, fmt.Errorf("path is dir:%s", path)
+		return nil, log.Errorf("path is dir:%s", path)
 	}
 	content, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -98,7 +98,7 @@ func (file *ConfigFile) StartMonitor(delegate func(config *LogConfig)) {
 				stat, err := os.Stat(file.path)
 				//必须是文件
 				if err != nil || stat.IsDir() {
-					fmt.Println("StartMonitor 0:", file.path, ":", err)
+					log.Println("StartMonitor 0:", file.path, ":", err)
 					continue loop
 				}
 				//文件修改时间不等则准备更新config
@@ -106,7 +106,7 @@ func (file *ConfigFile) StartMonitor(delegate func(config *LogConfig)) {
 					file.modTime = stat.ModTime()
 					config, err := file.Load(file.path)
 					if err != nil {
-						fmt.Println("StartMonitor 1 load fail:", file.path, ":", err)
+						log.Println("StartMonitor 1 load fail:", file.path, ":", err)
 						continue loop
 					}
 					file.invoke(delegate, config)
@@ -126,7 +126,7 @@ func (file *ConfigFile) StopMonitor() {
 func (file *ConfigFile) invoke(delegate func(config *LogConfig), config *LogConfig) {
 	defer func() {
 		if err := recover(); err != nil {
-			fmt.Println("invoke 0:", err)
+			log.Println("invoke 0:", err)
 		}
 	}()
 	delegate(config)

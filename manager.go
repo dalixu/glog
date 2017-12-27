@@ -1,7 +1,7 @@
 package logger
 
 import (
-	"fmt"
+	"log"
 	"runtime"
 	"sync"
 )
@@ -73,7 +73,7 @@ func (m *manager) flush(force bool) {
 	defer func() {
 		//保证外围循环不会挂掉
 		if err := recover(); err != nil {
-			fmt.Println("flush 0:", err)
+			log.Println("flush 0:", err)
 		}
 	}()
 	m.rwLocker.RLock()

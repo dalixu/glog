@@ -12,6 +12,7 @@ func init() {
 
 	globalTarget = make(map[string]TargetCtor)
 	globalTarget["file"] = createFileTarget
+	globalTarget["console"] = createConsoleTarget
 }
 
 var globalSerializer map[string]Serializer
