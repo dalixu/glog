@@ -3,7 +3,6 @@ package logger
 import (
 	"bytes"
 	"container/list"
-	"fmt"
 	"log"
 	"os"
 	"path"
@@ -149,7 +148,7 @@ func getShortDate() string {
 func (ft *fileTarget) writeFromCache(logs *bytes.Buffer) (size int) {
 	defer func() {
 		if err := recover(); err != nil {
-			fmt.Println("writeFromCache 0:", ft.FullLogFileName, ":", err)
+			log.Println("writeFromCache 0:", ft.FullLogFileName, ":", err)
 			size = 0
 		}
 	}()
@@ -160,7 +159,7 @@ func (ft *fileTarget) writeFromCache(logs *bytes.Buffer) (size int) {
 
 	f, err := os.OpenFile(ft.FullLogFileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, os.ModePerm)
 	if err != nil {
-		fmt.Println("writeFromCache 1:", ft.FullLogFileName, ":", err)
+		log.Println("writeFromCache 1:", ft.FullLogFileName, ":", err)
 		return 0
 	}
 	defer f.Close()
@@ -169,7 +168,7 @@ func (ft *fileTarget) writeFromCache(logs *bytes.Buffer) (size int) {
 		err = f.Sync()
 	}
 	if err != nil {
-		fmt.Println("writeFromCache 2:", ft.FullLogFileName, ":", err)
+		log.Println("writeFromCache 2:", ft.FullLogFileName, ":", err)
 		return 0
 	}
 	return n
