@@ -109,7 +109,6 @@ func (m *manager) startLoop() {
 				break loop
 			case <-time.After(50 * time.Millisecond):
 				m.flush(false)
-			default:
 			}
 		}
 	}()

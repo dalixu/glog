@@ -48,11 +48,12 @@ func (ft *fileTarget) Write(event *LogEvent, sr Serializer) {
 
 	bs := sr.Encode(event)
 	if bs == nil {
-		bs = []byte(fmt.Sprintf("%+v\n", event))
+		bs = []byte(fmt.Sprintf("%+v", event))
 	}
 	index := ft.CurrLogBuff % len(ft.LogBuf)
 	ft.LogBuf[index].Write(bs)
-	ft.CurrCacheSize += len(bs)
+	ft.LogBuf[index].WriteByte('\n')
+	ft.CurrCacheSize += len(bs) + 1
 
 }
 
@@ -70,6 +71,9 @@ func (ft *fileTarget) Flush() {
 	ft.CurrLogBuff = (ft.CurrLogBuff + 1) % len(ft.LogBuf)
 	ft.CurrCacheSize = 0
 	ft.Locker.Unlock()
+	if cache.Len() <= 0 {
+		return
+	}
 	//写入日志文件
 	ft.createLogFile()
 	ft.CurrLogSize += int64(ft.writeFromCache(cache))

@@ -40,7 +40,6 @@ func (ds *DefaultSerializer) Encode(e *LogEvent) []byte {
 		buf.WriteString(fmt.Sprintf("@%s:", k))
 		buf.WriteString(fmt.Sprint(v))
 	}
-	buf.WriteByte('\n')
 
 	return buf.Bytes()
 }
