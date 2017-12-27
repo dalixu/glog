@@ -3,6 +3,7 @@ package logger
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -30,6 +31,7 @@ type Layout struct {
 
 //LogConfig 文件配置
 type LogConfig struct {
+	Async   bool
 	Layouts []*Layout //只读
 }
 
@@ -51,7 +53,7 @@ func (file *ConfigFile) Load(path string) (lc *LogConfig, e error) {
 	defer func() {
 		if err := recover(); err != nil {
 			lc = nil
-			e = log.Errorf("%+v", err)
+			e = fmt.Errorf("%+v", err)
 		}
 	}()
 	if path == "" {
@@ -62,7 +64,7 @@ func (file *ConfigFile) Load(path string) (lc *LogConfig, e error) {
 		return nil, err
 	}
 	if stat.IsDir() {
-		return nil, log.Errorf("path is dir:%s", path)
+		return nil, fmt.Errorf("path is dir:%s", path)
 	}
 	content, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -140,7 +142,11 @@ func convert(content map[string]interface{}) (*LogConfig, error) {
 	layouts := content["Layouts"].([]interface{})
 	//设置默认值
 	config := &LogConfig{
+		Async:   false,
 		Layouts: nil,
+	}
+	if v, ok := content["Async"]; ok {
+		config.Async = v.(bool)
 	}
 	for _, v := range layouts {
 		tmp := v.(map[string]interface{})

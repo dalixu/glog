@@ -1,9 +1,11 @@
 package logger
 
 import (
+	"container/list"
 	"log"
-	"runtime"
 	"sync"
+	"sync/atomic"
+	"time"
 )
 
 //Manager 接口
@@ -20,15 +22,20 @@ type manager struct {
 	stop     chan bool
 	rwLocker *sync.RWMutex
 	config   *LogConfig // protected by rwLocker
+
+	queue        *list.List
+	atomicLocker int64
 }
 
 //newManager 返回Manager
 func newManager(config *LogConfig, file *ConfigFile) Manager {
 	mr := &manager{
-		stop:     make(chan bool), //无缓冲 自动会等
-		rwLocker: &sync.RWMutex{},
-		config:   config,
-		file:     file,
+		file:         file,
+		stop:         make(chan bool), //无缓冲 自动会等
+		rwLocker:     &sync.RWMutex{},
+		config:       config,
+		queue:        list.New(),
+		atomicLocker: 0,
 	}
 	mr.startLoop()
 	mr.file.StartMonitor(mr.Reload)
@@ -64,8 +71,12 @@ func (m *manager) Reload(config *LogConfig) {
 func (m *manager) WriteEvent(e LogEvent) {
 	m.rwLocker.RLock()
 	defer m.rwLocker.RUnlock()
-	for _, v := range m.config.Layouts {
-		v.Target.Write(&e, v.Serializer)
+	if m.config.Async {
+		m.asyncCache(e)
+	} else {
+		for _, v := range m.config.Layouts {
+			v.Target.Write(&e, v.Serializer)
+		}
 	}
 }
 
@@ -78,8 +89,12 @@ func (m *manager) flush(force bool) {
 	}()
 	m.rwLocker.RLock()
 	defer m.rwLocker.RUnlock()
+
+	if m.config.Async {
+		m.asyncWrite()
+	}
 	for _, v := range m.config.Layouts {
-		if force || v.Target.Filled() {
+		if force || v.Target.Overflow() {
 			v.Target.Flush()
 		}
 	}
@@ -92,10 +107,10 @@ func (m *manager) startLoop() {
 			select {
 			case <-m.stop:
 				break loop
+			case <-time.After(50 * time.Millisecond):
+				m.flush(false)
 			default:
 			}
-			m.flush(false)
-			runtime.Gosched()
 		}
 	}()
 }
@@ -103,4 +118,50 @@ func (m *manager) startLoop() {
 func (m *manager) stopLoop() {
 	m.stop <- true //等待loop退出
 	m.flush(true)
+}
+func (m *manager) asyncCache(e LogEvent) {
+	m.atomicLock()
+	m.queue.PushBack(&e)
+	m.atomicUnLock()
+}
+
+func (m *manager) asyncWrite() {
+	//如果是异步模式
+	var queue *list.List
+	m.atomicLock()
+	if m.queue.Len() > 0 {
+		queue = list.New()
+		for {
+			if m.queue.Len() <= 0 {
+				break
+			}
+			e := m.queue.Front()
+			m.queue.Remove(e)
+			queue.PushBack(e.Value)
+		}
+	}
+	m.atomicUnLock()
+	for {
+		if queue == nil || queue.Len() <= 0 {
+			break
+		}
+		node := queue.Front()
+		queue.Remove(node)
+		e := node.Value.(*LogEvent)
+		for _, v := range m.config.Layouts {
+			v.Target.Write(e, v.Serializer)
+		}
+	}
+}
+
+func (m *manager) atomicLock() {
+	for {
+		if atomic.CompareAndSwapInt64(&m.atomicLocker, 0, 1) {
+			break
+		}
+	}
+}
+
+func (m *manager) atomicUnLock() {
+	atomic.AddInt64(&m.atomicLocker, -1)
 }

@@ -9,7 +9,8 @@
             "Serializer":{"Type":"json"},
             "Target":{"Type":"file"}
         }
-    ]
+    ],
+    "Async":false
 }
 </pre>
 </p>
