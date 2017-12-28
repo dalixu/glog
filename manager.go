@@ -75,7 +75,9 @@ func (m *manager) WriteEvent(e LogEvent) {
 		m.asyncCache(e)
 	} else {
 		for _, v := range m.config.Layouts {
-			v.Target.Write(&e, v.Serializer)
+			if match(&e, v.Target) {
+				v.Target.Write(&e, v.Serializer)
+			}
 		}
 	}
 }
@@ -148,7 +150,9 @@ func (m *manager) asyncWrite() {
 		queue.Remove(node)
 		e := node.Value.(*LogEvent)
 		for _, v := range m.config.Layouts {
-			v.Target.Write(e, v.Serializer)
+			if match(e, v.Target) {
+				v.Target.Write(e, v.Serializer)
+			}
 		}
 	}
 }
@@ -163,4 +167,10 @@ func (m *manager) atomicLock() {
 
 func (m *manager) atomicUnLock() {
 	atomic.AddInt64(&m.atomicLocker, -1)
+}
+
+func match(event *LogEvent, t Target) bool {
+	return (t.Name() == "*" || event.Name == t.Name()) &&
+		(t.MaxLevel() == EveryLevel || event.Level <= t.MaxLevel()) &&
+		(t.MinLevel() == EveryLevel || event.Level >= t.MinLevel())
 }

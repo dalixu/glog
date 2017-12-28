@@ -15,7 +15,8 @@ type LogLevel int
 
 //log的等级
 const (
-	TraceLevel = 1 + iota
+	EveryLevel = iota
+	TraceLevel
 	DebugLevel
 	InfoLevel
 	WarnLevel

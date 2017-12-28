@@ -6,19 +6,24 @@ import (
 
 //输出信息到console 使用log库来实现
 type consoleTarget struct {
-	Name     string   //只读
-	MinLevel LogLevel //只读
-	MaxLevel LogLevel //只读
+	name     string   //只读
+	minLevel LogLevel //只读
+	maxLevel LogLevel //只读
 }
 
-func (ct *consoleTarget) Match(event *LogEvent) bool {
-	return event.Level >= ct.MinLevel && event.Level <= ct.MaxLevel && (ct.Name == "" || ct.Name == event.Name)
+func (ct *consoleTarget) Name() string {
+	return ct.name
+}
+
+func (ct *consoleTarget) MinLevel() LogLevel {
+	return ct.minLevel
+}
+
+func (ct *consoleTarget) MaxLevel() LogLevel {
+	return ct.maxLevel
 }
 
 func (ct *consoleTarget) Write(event *LogEvent, sr Serializer) {
-	if !ct.Match(event) {
-		return
-	}
 	bs := sr.Encode(event)
 	if bs != nil {
 		log.Println(string(bs))
@@ -40,22 +45,22 @@ func createConsoleTarget(config map[string]interface{}) Target {
 
 	name := config["Name"]
 	if name == nil {
-		ct.Name = ""
+		ct.name = "*"
 	} else {
-		ct.Name = name.(string)
+		ct.name = name.(string)
 	}
 	maxLevel := config["MaxLevel"]
 	if maxLevel == nil {
-		ct.MaxLevel = FatalLevel
+		ct.maxLevel = EveryLevel
 	} else {
-		ct.MaxLevel = toLevel(maxLevel.(string), FatalLevel)
+		ct.maxLevel = toLevel(maxLevel.(string))
 	}
 
 	minLevel := config["MinLevel"]
 	if minLevel == nil {
-		ct.MinLevel = TraceLevel
+		ct.minLevel = EveryLevel
 	} else {
-		ct.MinLevel = toLevel(minLevel.(string), TraceLevel)
+		ct.minLevel = toLevel(minLevel.(string))
 	}
 	return ct
 }

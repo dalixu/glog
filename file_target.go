@@ -13,103 +13,107 @@ import (
 
 //FileTarget 文件项
 type fileTarget struct {
-	Name       string        //只读
-	MinLevel   LogLevel      //只读
-	MaxLevel   LogLevel      //只读
-	Suffix     string        //只读文件名后缀 默认的文件名是 {shortDate}-suffix
-	Interval   time.Duration //只读 写入的时间间隔
-	VolumeSize int64         //单个日志文件大小
-	CacheSize  int           // 日志缓存大小
-	Root       string        // 日志存放的根目录
+	name       string        //只读
+	minLevel   LogLevel      //只读
+	maxLevel   LogLevel      //只读
+	suffix     string        //只读文件名后缀 默认的文件名是 {shortDate}-suffix
+	interval   time.Duration //只读 写入的时间间隔
+	volumeSize int64         //单个日志文件大小
+	cacheSize  int           // 日志缓存大小
+	root       string        // 日志存放的根目录
 
-	Slice           int //当前写入的文件序号 默认为0
-	FullLogFileName string
-	CurrLogSize     int64
+	slice           int //当前写入的文件序号 默认为0
+	fullLogFileName string
+	currLogSize     int64
 
-	Locker        *sync.Mutex
-	CurrLogBuff   int             //protected by locker
-	LogBuf        [2]bytes.Buffer //protected by locker
-	CurrCacheSize int             //protected by locker 当前buffer中的大小
+	locker        *sync.Mutex
+	currLogBuff   int             //protected by locker
+	logBuf        [2]bytes.Buffer //protected by locker
+	currCacheSize int             //protected by locker 当前buffer中的大小
 
-	NextWriteTime time.Time
-	LastPCDate    string
+	nextWriteTime time.Time
+	lastPCDate    string
 }
 
-func (ft *fileTarget) Match(event *LogEvent) bool {
-	return event.Level >= ft.MinLevel && event.Level <= ft.MaxLevel && (ft.Name == "" || ft.Name == event.Name)
+func (ft *fileTarget) Name() string {
+	return ft.name
+}
+
+func (ft *fileTarget) MinLevel() LogLevel {
+	return ft.minLevel
+}
+
+func (ft *fileTarget) MaxLevel() LogLevel {
+	return ft.maxLevel
 }
 
 func (ft *fileTarget) Write(event *LogEvent, sr Serializer) {
-	if !ft.Match(event) {
-		return
-	}
-	ft.Locker.Lock()
-	defer ft.Locker.Unlock()
+	ft.locker.Lock()
+	defer ft.locker.Unlock()
 
 	bs := sr.Encode(event)
 	if bs == nil {
 		bs = []byte(fmt.Sprintf("%+v", event))
 	}
-	index := ft.CurrLogBuff % len(ft.LogBuf)
-	ft.LogBuf[index].Write(bs)
-	ft.LogBuf[index].WriteByte('\n')
-	ft.CurrCacheSize += len(bs) + 1
+	index := ft.currLogBuff % len(ft.logBuf)
+	ft.logBuf[index].Write(bs)
+	ft.logBuf[index].WriteByte('\n')
+	ft.currCacheSize += len(bs) + 1
 
 }
 
 func (ft *fileTarget) Overflow() bool {
 	//这里ft.CurrCacheSize 没有加锁 但是考虑到CurrCacheSize 不需要太精确
 	//只要没有panic就不加锁 避免降低效率
-	return time.Now().After(ft.NextWriteTime) || ft.CurrCacheSize >= ft.CacheSize
+	return time.Now().After(ft.nextWriteTime) || ft.currCacheSize >= ft.cacheSize
 }
 
 func (ft *fileTarget) Flush() {
 	//写入日志文件
 	var cache *bytes.Buffer
-	ft.Locker.Lock()
-	cache = &ft.LogBuf[ft.CurrLogBuff%len(ft.LogBuf)]
-	ft.CurrLogBuff = (ft.CurrLogBuff + 1) % len(ft.LogBuf)
-	ft.CurrCacheSize = 0
-	ft.Locker.Unlock()
-	if cache.Len() <= 0 {
-		return
+	ft.locker.Lock()
+	cache = &ft.logBuf[ft.currLogBuff%len(ft.logBuf)]
+	ft.currLogBuff = (ft.currLogBuff + 1) % len(ft.logBuf)
+	ft.currCacheSize = 0
+	ft.locker.Unlock()
+	if cache.Len() > 0 {
+		//写入日志文件
+		ft.createLogFile()
+		ft.currLogSize += int64(ft.writeFromCache(cache))
 	}
-	//写入日志文件
-	ft.createLogFile()
-	ft.CurrLogSize += int64(ft.writeFromCache(cache))
-	ft.NextWriteTime = time.Now().Add(ft.Interval)
+	ft.nextWriteTime = time.Now().Add(ft.interval)
 }
 
 func (ft *fileTarget) createLogFile() {
 	currPCDate := getShortDate()
-	if ft.FullLogFileName != "" && ft.CurrLogSize >= ft.VolumeSize {
+	if ft.fullLogFileName != "" && ft.currLogSize >= ft.volumeSize {
 		//文件超过允许的大小 写入到新文件中去
-		if ft.Slice < 100 {
-			ft.Slice++
-			ft.FullLogFileName = ""
-			ft.CurrLogSize = 0
+		if ft.slice < 100 {
+			ft.slice++
+			ft.fullLogFileName = ""
+			ft.currLogSize = 0
 		}
 	}
 	//日期切换了 slice也要变成0
-	if ft.LastPCDate != currPCDate {
-		ft.Slice = 0
-		ft.CurrLogSize = 0
-		ft.FullLogFileName = "" //文件名置空
-		ft.LastPCDate = currPCDate
+	if ft.lastPCDate != currPCDate {
+		ft.slice = 0
+		ft.currLogSize = 0
+		ft.fullLogFileName = "" //文件名置空
+		ft.lastPCDate = currPCDate
 	}
-	if ft.FullLogFileName == "" {
+	if ft.fullLogFileName == "" {
 		for {
 			//如果文件名不存在 或者 日期切换 要根据slice来生成新的文件名
-			sliceDesc := strconv.Itoa(ft.Slice)
-			ft.FullLogFileName = path.Join(ft.Root, ft.LastPCDate+"-"+sliceDesc+"-"+ft.Suffix)
-			stat, err := os.Stat(ft.FullLogFileName)
+			sliceDesc := strconv.Itoa(ft.slice)
+			ft.fullLogFileName = path.Join(ft.root, ft.lastPCDate+"-"+sliceDesc+"-"+ft.suffix)
+			stat, err := os.Stat(ft.fullLogFileName)
 			if err == nil {
-				ft.CurrLogSize = stat.Size()
+				ft.currLogSize = stat.Size()
 			}
-			if ft.CurrLogSize < ft.VolumeSize || ft.Slice >= 100 {
+			if ft.currLogSize < ft.volumeSize || ft.slice >= 100 {
 				break
 			}
-			ft.Slice++
+			ft.slice++
 		}
 	}
 }
@@ -121,7 +125,7 @@ func getShortDate() string {
 func (ft *fileTarget) writeFromCache(logs *bytes.Buffer) (size int) {
 	defer func() {
 		if err := recover(); err != nil {
-			log.Println("writeFromCache 0:", ft.FullLogFileName, ":", err)
+			log.Println("writeFromCache 0:", ft.fullLogFileName, ":", err)
 			size = 0
 		}
 	}()
@@ -130,9 +134,9 @@ func (ft *fileTarget) writeFromCache(logs *bytes.Buffer) (size int) {
 	}
 	defer logs.Reset()
 
-	f, err := os.OpenFile(ft.FullLogFileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, os.ModePerm)
+	f, err := os.OpenFile(ft.fullLogFileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, os.ModePerm)
 	if err != nil {
-		log.Println("writeFromCache 1:", ft.FullLogFileName, ":", err)
+		log.Println("writeFromCache 1:", ft.fullLogFileName, ":", err)
 		return 0
 	}
 	defer f.Close()
@@ -141,7 +145,7 @@ func (ft *fileTarget) writeFromCache(logs *bytes.Buffer) (size int) {
 		err = f.Sync()
 	}
 	if err != nil {
-		log.Println("writeFromCache 2:", ft.FullLogFileName, ":", err)
+		log.Println("writeFromCache 2:", ft.fullLogFileName, ":", err)
 		return 0
 	}
 	return n
@@ -151,63 +155,63 @@ func createFileTarget(config map[string]interface{}) Target {
 	ft := &fileTarget{}
 	volumeSize := config["VolumeSize"]
 	if volumeSize != nil {
-		ft.VolumeSize = volumeSize.(int64)
+		ft.volumeSize = volumeSize.(int64)
 	} else {
-		ft.VolumeSize = 1024 * 1024 * 10
+		ft.volumeSize = 1024 * 1024 * 10
 	}
 
 	root := config["Root"]
 	if root != nil {
-		ft.Root = root.(string)
+		ft.root = root.(string)
 	} else {
-		ft.Root = "./logs"
+		ft.root = "./logs"
 	}
-	err := os.MkdirAll(ft.Root, os.ModePerm)
+	err := os.MkdirAll(ft.root, os.ModePerm)
 	if err != nil {
-		log.Println("createFileTarget:path ", ft.Root, "\n", err)
+		log.Println("createFileTarget:path ", ft.root, " ", err)
 		return nil
 	}
 	maxLevel := config["MaxLevel"]
 	if maxLevel == nil {
-		ft.MaxLevel = FatalLevel
+		ft.maxLevel = EveryLevel
 	} else {
-		ft.MaxLevel = toLevel(maxLevel.(string), FatalLevel)
+		ft.maxLevel = toLevel(maxLevel.(string))
 	}
 
 	minLevel := config["MinLevel"]
 	if minLevel == nil {
-		ft.MinLevel = TraceLevel
+		ft.minLevel = EveryLevel
 	} else {
-		ft.MinLevel = toLevel(minLevel.(string), TraceLevel)
+		ft.minLevel = toLevel(minLevel.(string))
 	}
 	name := config["Name"]
 	if name == nil {
-		ft.Name = ""
+		ft.name = "*"
 	} else {
-		ft.Name = name.(string)
+		ft.name = name.(string)
 	}
 	suffix := config["Suffix"]
 	if suffix == nil {
-		ft.Suffix = ".log"
+		ft.suffix = ".log"
 	} else {
-		ft.Suffix = suffix.(string)
+		ft.suffix = suffix.(string)
 	}
 	interval := config["Interval"]
 	if interval == nil {
-		ft.Interval = time.Duration(time.Second)
+		ft.interval = time.Duration(time.Second)
 	} else {
-		ft.Interval = time.Duration(interval.(int)) * time.Second
+		ft.interval = time.Duration(interval.(int)) * time.Second
 	}
 
 	cacheSize := config["CacheSize"]
 	if cacheSize == nil {
-		ft.CacheSize = 1024 * 8
+		ft.cacheSize = 1024 * 8
 	} else {
-		ft.CacheSize = cacheSize.(int)
+		ft.cacheSize = cacheSize.(int)
 	}
 
-	ft.Locker = &sync.Mutex{}
-	ft.CurrLogBuff = 0
-	ft.NextWriteTime = time.Now().Add(ft.Interval)
+	ft.locker = &sync.Mutex{}
+	ft.currLogBuff = 0
+	ft.nextWriteTime = time.Now().Add(ft.interval)
 	return ft
 }
