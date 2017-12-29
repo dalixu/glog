@@ -2,6 +2,8 @@
 package logger
 
 import (
+	"fmt"
+	"runtime"
 	"runtime/debug"
 	"time"
 )
@@ -125,6 +127,11 @@ func (lr *logger) write(level LogLevel, desc string, args ...interface{}) {
 	stackTrace := ""
 	if level >= ErrorLevel {
 		stackTrace = string(debug.Stack())
+	} else {
+		_, file, line, ok := runtime.Caller(2)
+		if ok {
+			stackTrace = fmt.Sprintf("%s:%d", file, line)
+		}
 	}
 	lr.WriteEvent(LogEvent{
 		Level:      level,
@@ -140,6 +147,11 @@ func (lr *logger) writef(level LogLevel, desc string, format string, args ...int
 	stackTrace := ""
 	if level >= ErrorLevel {
 		stackTrace = string(debug.Stack())
+	} else {
+		_, file, line, ok := runtime.Caller(2)
+		if ok {
+			stackTrace = fmt.Sprintf("%s:%d", file, line)
+		}
 	}
 	lr.WriteEvent(LogEvent{
 		Level:      level,
