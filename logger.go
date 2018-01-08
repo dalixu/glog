@@ -1,5 +1,5 @@
-//Package logger  学习自FLogger https://github.com/cyfonly/FLogger.git
-package logger
+//Package glog  学习自FLogger https://github.com/cyfonly/FLogger.git
+package glog
 
 import (
 	"fmt"

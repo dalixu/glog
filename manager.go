@@ -1,4 +1,4 @@
-package logger
+package glog
 
 import (
 	"container/list"

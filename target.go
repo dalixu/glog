@@ -1,4 +1,4 @@
-package logger
+package glog
 
 //Target 日志文件写入
 type Target interface {

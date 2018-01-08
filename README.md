@@ -28,7 +28,7 @@ Serializer 目前支持plain 和json<br/>
 3.在配置文件中Serializer的Type字段中指定同样的key<br/>
 4.NewManager<br/>
 
-Target 目前支持file<br/>
+Target 目前支持file console<br/>
 fileTarget 使用异步写入日志 Async字段为true时 异步序列化 否则同步序列化<br/>
 自定义Target<br/>
 1.实现TargetCtor<br/>
