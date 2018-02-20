@@ -60,7 +60,10 @@ func (m *manager) Reload(config *LogConfig) {
 	m.stopLoop()
 	m.rwLocker.Lock()
 	defer m.rwLocker.Unlock()
-
+	//stopLoop后 lock前 可能已经有WriteEvent进去 要write以及flush
+	if m.config.Async {
+		m.asyncWrite()
+	}
 	for _, v := range m.config.Layouts {
 		v.Target.Flush()
 	}

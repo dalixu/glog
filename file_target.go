@@ -48,13 +48,13 @@ func (ft *fileTarget) MaxLevel() LogLevel {
 }
 
 func (ft *fileTarget) Write(event *LogEvent, sr Serializer) {
-	ft.locker.Lock()
-	defer ft.locker.Unlock()
-
 	bs := sr.Encode(event)
 	if bs == nil {
 		bs = []byte(fmt.Sprintf("%+v", event))
 	}
+
+	ft.locker.Lock()
+	defer ft.locker.Unlock()
 	index := ft.currLogBuff % len(ft.logBuf)
 	ft.logBuf[index].Write(bs)
 	ft.logBuf[index].WriteByte('\n')
@@ -75,12 +75,15 @@ func (ft *fileTarget) Flush() {
 	cache = &ft.logBuf[ft.currLogBuff%len(ft.logBuf)]
 	ft.currLogBuff = (ft.currLogBuff + 1) % len(ft.logBuf)
 	ft.currCacheSize = 0
+
 	ft.locker.Unlock()
 	if cache.Len() > 0 {
 		//写入日志文件
 		ft.createLogFile()
 		ft.currLogSize += int64(ft.writeFromCache(cache))
 	}
+	// nextWritetime 是一个结构 Overflow里读 Flush里写 如果 两个函数不在一个线程会出问题
+	//目前为止manager保证了 overflow和flush会在一个线程调用
 	ft.nextWriteTime = time.Now().Add(ft.interval)
 }
 

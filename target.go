@@ -7,7 +7,7 @@ type Target interface {
 	MinLevel() LogLevel
 	Write(event *LogEvent, sr Serializer) //manager 可能在多个routine调用
 	Overflow() bool                       //manager保证同一时刻只有1个routine调用
-	Flush()                               //manager保证同一时刻只有1个routine调用
+	Flush()                               //manager保证同一时刻只有1个routine调用 manager保证 Overflow()和Flush() 在同一个routine中调用
 }
 
 func toLevel(l string) LogLevel {
