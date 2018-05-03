@@ -28,7 +28,7 @@ func (ct *consoleTarget) Write(event *LogEvent, sr Serializer) {
 	if bs != nil {
 		log.Println(string(bs))
 	} else {
-		log.Printf("%+v\n", event)
+		log.Printf("%+v\r\n", event)
 	}
 }
 

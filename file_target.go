@@ -57,8 +57,9 @@ func (ft *fileTarget) Write(event *LogEvent, sr Serializer) {
 	defer ft.locker.Unlock()
 	index := ft.currLogBuff % len(ft.logBuf)
 	ft.logBuf[index].Write(bs)
+	ft.logBuf[index].WriteByte('\r')
 	ft.logBuf[index].WriteByte('\n')
-	ft.currCacheSize += len(bs) + 1
+	ft.currCacheSize += len(bs) + 2
 
 }
 
