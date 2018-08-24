@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"runtime/debug"
 	"time"
+
+	"github.com/dalixu/glogger"
 )
 
 // import (
@@ -30,19 +32,7 @@ type LogEvent struct {
 
 //Logger 日志打印接口 方便替换为第三方log
 type Logger interface {
-	Trace(v ...interface{})
-	Tracef(format string, v ...interface{})
-	Debug(v ...interface{})
-	Debugf(format string, v ...interface{})
-	Info(v ...interface{})
-	Infof(format string, v ...interface{})
-	Warn(v ...interface{})
-	Warnf(format string, v ...interface{})
-	Error(v ...interface{})
-	Errorf(format string, v ...interface{})
-	Fatal(v ...interface{})
-	Fatalf(format string, v ...interface{})
-
+	glogger.GLogger
 	WriteEvent(e LogEvent) //也许应该用*LogEvent
 }
 
