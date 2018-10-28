@@ -2,7 +2,27 @@ package glog
 
 import (
 	"log"
+
+	"github.com/dalixu/glogger"
 )
+
+//GLoggerFactory 实现gloggerFactory
+type GLoggerFactory struct {
+	manager Manager
+}
+
+//GetLogger implement GLogger
+func (gf *GLoggerFactory) GetLogger(name string) glogger.GLogger {
+	return gf.manager.GetLogger(name)
+}
+
+//NewGLoggerFactory 返回1个glogger.Factory
+func NewGLoggerFactory(path string) glogger.Factory {
+	manager := New(path)
+	return &GLoggerFactory{
+		manager: manager,
+	}
+}
 
 //全局配置
 func init() {
